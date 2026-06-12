@@ -122,13 +122,13 @@ class TestGeoFilter:
         listing_outside = {**SAMPLE_LISTING, "lat": 51.3000, "lon": 71.6000}
         assert geo.matches(listing_outside) is False
 
-    def test_listing_without_coordinates_is_skipped(self):
-        """Listing with no lat/lon is excluded (can't verify location)."""
+    def test_listing_without_coordinates_is_passed(self):
+        """Listing with no lat/lon passes — trust server-side areas= filtering."""
         from krisha_bot.filters import GeoFilter
         from tests.fixtures import SAMPLE_POLYGON
         geo = GeoFilter(polygon=SAMPLE_POLYGON)
         listing_no_coords = {**SAMPLE_LISTING, "lat": None, "lon": None}
-        assert geo.matches(listing_no_coords) is False
+        assert geo.matches(listing_no_coords) is True
 
     def test_no_polygon_passes_all(self):
         """GeoFilter with no polygon accepts everything."""
