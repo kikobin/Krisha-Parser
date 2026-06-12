@@ -53,6 +53,7 @@ def main():
     app.add_handler(CommandHandler("test",     bot_handlers.cmd_test))
     app.add_handler(CommandHandler("history",  bot_handlers.cmd_history))
     app.add_handler(CommandHandler("stats",    bot_handlers.cmd_stats))
+    app.add_handler(CommandHandler("reset",    bot_handlers.cmd_reset))
     app.add_handler(CallbackQueryHandler(bot_handlers.callback_skip, pattern=r"^skip:"))
 
     async def post_init(application):

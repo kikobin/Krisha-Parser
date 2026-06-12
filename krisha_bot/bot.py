@@ -17,7 +17,8 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/stats — статистика\n"
         "/pause — приостановить\n"
         "/resume — возобновить\n"
-        "/test — проверить настройки прямо сейчас"
+        "/test — проверить настройки прямо сейчас\n"
+        "/reset — сбросить список просмотренных (если был флуд)"
     )
 
 
@@ -197,7 +198,7 @@ async def cmd_setarea(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     storage.update_settings(
         chat_id=update.effective_chat.id,
-        updates={"polygon_url": url, "search_url": search_url, "active": True},
+        updates={"polygon_url": url, "search_url": search_url, "active": True, "warmed_up": False},
     )
     await update.message.reply_text("Область поиска обновлена. Мониторинг запущен.")
 
@@ -240,6 +241,21 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Статус: {'активен ✅' if settings.get('active') else 'на паузе ⏸'}",
     ]
     await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
+async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Re-scan current listings silently and reset seen list for this area."""
+    storage = context.bot_data["storage"]
+    chat_id = update.effective_chat.id
+    settings = storage.get_settings(chat_id)
+    if not settings or not settings.get("search_url"):
+        await update.message.reply_text("Сначала задай область: /setarea <URL>")
+        return
+    storage.update_settings(chat_id, {"warmed_up": False})
+    await update.message.reply_text(
+        "Сброс. На следующем тике бот молча пометит все текущие объявления как просмотренные — "
+        "новые уведомления только для реально новых."
+    )
 
 
 async def callback_skip(update: Update, context: ContextTypes.DEFAULT_TYPE):

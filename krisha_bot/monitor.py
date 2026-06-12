@@ -26,7 +26,7 @@ class Monitor:
                 all_listings.extend(listings)
                 current_url = self.parser.parse_next_page_url(html)
 
-            # Dedup first — skip already-sent listings
+            # Dedup first — skip already-sent and blacklisted listings
             new_listings = self.storage.filter_new(all_listings)
 
             # Attribute + geo filters applied only to new listings
@@ -41,6 +41,22 @@ class Monitor:
         except FetchError as exc:
             log.error("Fetch error for chat %s: %s", chat_id, exc)
 
+    async def _warmup(self, chat_id: int, url: str):
+        """First-run: silently mark all current listings as seen — no notifications."""
+        try:
+            all_ids = []
+            current_url = url
+            while current_url:
+                html = self.parser.fetch_page(current_url)
+                listings = self.parser.parse_page(html)
+                all_ids.extend(l["id"] for l in listings)
+                current_url = self.parser.parse_next_page_url(html)
+            self.storage.bulk_mark_seen(all_ids)
+            self.storage.update_settings(chat_id, {"warmed_up": True})
+            log.info("Warmed up chat %s: marked %d listings as seen", chat_id, len(all_ids))
+        except FetchError as exc:
+            log.error("Warmup error for chat %s: %s", chat_id, exc)
+
     async def run(self):
         while True:
             active = self.storage.get_active_chats()
@@ -48,13 +64,12 @@ class Monitor:
                 settings = self.storage.get_settings(chat_id)
                 if not settings:
                     continue
-                # Build filter and URL from stored settings
+
                 from krisha_bot.filters import Filter, GeoFilter
                 attr_filter = Filter.from_dict(settings)
                 polygon_url = settings.get("polygon_url", "")
                 geo = GeoFilter.from_url(polygon_url) if polygon_url else GeoFilter(None)
 
-                # Combined filter: attribute AND geo
                 class CombinedFilter:
                     def __init__(self, af, gf):
                         self._af = af
@@ -65,6 +80,12 @@ class Monitor:
                 combined = CombinedFilter(attr_filter, geo)
                 url = settings.get("search_url") or settings.get("polygon_url", "")
                 url = self.parser.build_url_from_krisha_url(url)
+
+                # First run after /setarea: silently mark existing listings as seen
+                if not settings.get("warmed_up"):
+                    await self._warmup(chat_id, url)
+                    continue
+
                 await self.tick(chat_id=chat_id, filters=combined, url=url)
 
             await asyncio.sleep(self.interval_seconds)
