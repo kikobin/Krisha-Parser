@@ -92,7 +92,7 @@ class GeoFilter:
         lat = listing.get("lat")
         lon = listing.get("lon")
         if lat is None or lon is None:
-            return False
+            return True  # no coords in HTML — trust server-side areas= param
         return any(_point_in_polygon(lon, lat, p) for p in self._polygons)
 
     @classmethod
