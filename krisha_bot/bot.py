@@ -136,7 +136,8 @@ async def cmd_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         from krisha_bot.filters import Filter, GeoFilter
-        html = parser.fetch_page(settings["search_url"])
+        url = parser.build_url_from_krisha_url(settings["search_url"])
+        html = parser.fetch_page(url)
         listings = parser.parse_page(html)
 
         attr_filter = Filter.from_dict(settings)

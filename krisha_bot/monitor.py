@@ -62,6 +62,7 @@ class Monitor:
 
                 combined = CombinedFilter(attr_filter, geo)
                 url = settings.get("search_url") or settings.get("polygon_url", "")
+                url = self.parser.build_url_from_krisha_url(url)
                 await self.tick(chat_id=chat_id, filters=combined, url=url)
 
             await asyncio.sleep(self.interval_seconds)
