@@ -135,30 +135,42 @@ async def cmd_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Сначала задай область: /setarea <URL>")
         return
 
-    await update.message.reply_text("Ищу последнее объявление...")
-
     try:
         from krisha_bot.filters import Filter, GeoFilter
         url = parser.build_url_from_krisha_url(settings["search_url"])
+
+        await update.message.reply_text(f"Запрос:\n<code>{url}</code>", parse_mode="HTML")
+
         html = parser.fetch_page(url)
         listings = parser.parse_page(html)
+
+        if not listings:
+            snippet = html[:300].replace("<", "&lt;").replace(">", "&gt;")
+            await update.message.reply_text(
+                f"Парсер вернул 0 объявлений.\n"
+                f"Начало страницы:\n<code>{snippet}</code>",
+                parse_mode="HTML",
+            )
+            return
 
         attr_filter = Filter.from_dict(settings)
         geo = GeoFilter.from_url(settings.get("polygon_url", ""))
 
-        matched = [l for l in listings if attr_filter.matches(l) and geo.matches(l)]
+        after_geo = [l for l in listings if geo.matches(l)]
+        matched = [l for l in after_geo if attr_filter.matches(l)]
+
+        status = (
+            f"Всего на странице: {len(listings)}\n"
+            f"После геофильтра: {len(after_geo)}\n"
+            f"После фильтра цены/комнат: {len(matched)}"
+        )
 
         if not matched:
-            await update.message.reply_text(
-                f"Нашёл {len(listings)} объявлений на странице, но ни одно не прошло фильтры.\n"
-                f"Попробуй расширить диапазон цены (/setprice)."
-            )
+            await update.message.reply_text(status)
             return
 
         await notifier.send_listing(chat_id=chat_id, listing=matched[0])
-        await update.message.reply_text(
-            f"Фильтры работают. Найдено {len(matched)} из {len(listings)} на первой странице."
-        )
+        await update.message.reply_text(status)
 
     except Exception as e:
         await update.message.reply_text(f"Ошибка: {e}")
