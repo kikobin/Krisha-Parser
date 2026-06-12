@@ -212,13 +212,15 @@ class KrishaParser:
 
     def build_url_from_krisha_url(self, krisha_url: str) -> str:
         """Convert map URL to list URL, preserving areas param."""
-        url = krisha_url.replace("/map/arenda/", "/arenda/")
-        url = url.replace("/map/prodazha/", "/prodazha/")
-        # Remove map-only params
-        for p in ["zoom=", "lat=", "lon="]:
-            url = re.sub(rf"[&?]{p}[^&]*", "", url)
-        url = re.sub(r"\?&", "?", url)
-        return url
+        from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+        parsed = urlparse(krisha_url)
+        path = parsed.path.replace("/map/arenda/", "/arenda/").replace("/map/prodazha/", "/prodazha/")
+        # Keep only non-map params (drop zoom, lat, lon)
+        params = parse_qs(parsed.query, keep_blank_values=True)
+        for drop in ("zoom", "lat", "lon"):
+            params.pop(drop, None)
+        query = urlencode({k: v[0] for k, v in params.items()})
+        return urlunparse((parsed.scheme, parsed.netloc, path, "", query, ""))
 
 
 # ------------------------------------------------------------------

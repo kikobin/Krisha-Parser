@@ -137,8 +137,12 @@ async def cmd_setarea(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    # Convert /map/ URL to list URL for fetching
+    parser = context.bot_data.get("parser")
+    search_url = parser.build_url_from_krisha_url(url) if parser else url
+
     storage.update_settings(
         chat_id=update.effective_chat.id,
-        updates={"polygon_url": url, "search_url": url, "active": True},
+        updates={"polygon_url": url, "search_url": search_url, "active": True},
     )
     await update.message.reply_text("Область поиска обновлена. Мониторинг запущен.")
