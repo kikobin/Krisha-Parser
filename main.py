@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 
-from telegram.ext import Application, CommandHandler
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 
 from krisha_bot import bot as bot_handlers
 from krisha_bot.monitor import Monitor
@@ -42,7 +42,6 @@ def main():
     app.bot_data["parser"] = parser
     app.bot_data["notifier"] = notifier
 
-    app.add_handler(CommandHandler("test",     bot_handlers.cmd_test))
     app.add_handler(CommandHandler("start",    bot_handlers.cmd_start))
     app.add_handler(CommandHandler("setprice", bot_handlers.cmd_setprice))
     app.add_handler(CommandHandler("setrooms", bot_handlers.cmd_setrooms))
@@ -51,6 +50,10 @@ def main():
     app.add_handler(CommandHandler("pause",    bot_handlers.cmd_pause))
     app.add_handler(CommandHandler("resume",   bot_handlers.cmd_resume))
     app.add_handler(CommandHandler("interval", bot_handlers.cmd_interval))
+    app.add_handler(CommandHandler("test",     bot_handlers.cmd_test))
+    app.add_handler(CommandHandler("history",  bot_handlers.cmd_history))
+    app.add_handler(CommandHandler("stats",    bot_handlers.cmd_stats))
+    app.add_handler(CallbackQueryHandler(bot_handlers.callback_skip, pattern=r"^skip:"))
 
     async def post_init(application):
         asyncio.create_task(monitor.run())

@@ -35,6 +35,8 @@ class Monitor:
             if new_listings:
                 await self.notifier.send_batch(chat_id=chat_id, listings=new_listings)
                 self.storage.bulk_mark_seen([l["id"] for l in new_listings])
+                for listing in new_listings:
+                    self.storage.save_to_history(chat_id, listing)
 
         except FetchError as exc:
             log.error("Fetch error for chat %s: %s", chat_id, exc)

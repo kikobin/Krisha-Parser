@@ -28,11 +28,30 @@ class Storage:
             "CREATE INDEX IF NOT EXISTS idx_seen_at ON seen_listings(seen_at)"
         )
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS blacklist (
+                listing_id TEXT PRIMARY KEY,
+                chat_id    INTEGER NOT NULL,
+                added_at   TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS user_settings (
                 chat_id  INTEGER PRIMARY KEY,
                 settings TEXT NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS history (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id    INTEGER NOT NULL,
+                listing_id TEXT NOT NULL,
+                listing    TEXT NOT NULL,
+                sent_at    TEXT NOT NULL
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_history_chat ON history(chat_id, sent_at)"
+        )
         conn.commit()
         conn.close()
 
@@ -68,7 +87,7 @@ class Storage:
         conn.close()
 
     def filter_new(self, listings: list) -> list:
-        return [l for l in listings if not self.is_seen(l["id"])]
+        return [l for l in listings if not self.is_seen(l["id"]) and not self.is_blacklisted(l["id"])]
 
     def seen_count(self) -> int:
         conn = self._get_conn()
@@ -84,6 +103,66 @@ class Storage:
         conn.execute("DELETE FROM seen_listings WHERE seen_at < ?", (cutoff,))
         conn.commit()
         conn.close()
+
+    # ------------------------------------------------------------------
+    # Blacklist
+    # ------------------------------------------------------------------
+
+    def blacklist(self, listing_id: str, chat_id: int):
+        conn = self._get_conn()
+        conn.execute(
+            "INSERT OR IGNORE INTO blacklist (listing_id, chat_id, added_at) VALUES (?, ?, ?)",
+            (listing_id, chat_id, datetime.datetime.now().isoformat()),
+        )
+        conn.commit()
+        conn.close()
+
+    def is_blacklisted(self, listing_id: str) -> bool:
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT 1 FROM blacklist WHERE listing_id = ?", (listing_id,)
+        ).fetchone()
+        conn.close()
+        return row is not None
+
+    # ------------------------------------------------------------------
+    # History
+    # ------------------------------------------------------------------
+
+    def save_to_history(self, chat_id: int, listing: dict):
+        conn = self._get_conn()
+        conn.execute(
+            "INSERT INTO history (chat_id, listing_id, listing, sent_at) VALUES (?, ?, ?, ?)",
+            (chat_id, listing["id"], json.dumps(listing, ensure_ascii=False),
+             datetime.datetime.now().isoformat()),
+        )
+        conn.commit()
+        conn.close()
+
+    def get_history(self, chat_id: int, limit: int = 5) -> list:
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT listing FROM history WHERE chat_id = ? ORDER BY sent_at DESC LIMIT ?",
+            (chat_id, limit),
+        ).fetchall()
+        conn.close()
+        return [json.loads(r["listing"]) for r in rows]
+
+    def get_stats(self, chat_id: int) -> dict:
+        conn = self._get_conn()
+        today = datetime.date.today().isoformat()
+        total = conn.execute(
+            "SELECT COUNT(*) FROM history WHERE chat_id = ?", (chat_id,)
+        ).fetchone()[0]
+        today_count = conn.execute(
+            "SELECT COUNT(*) FROM history WHERE chat_id = ? AND sent_at >= ?",
+            (chat_id, today),
+        ).fetchone()[0]
+        blacklisted = conn.execute(
+            "SELECT COUNT(*) FROM blacklist WHERE chat_id = ?", (chat_id,)
+        ).fetchone()[0]
+        conn.close()
+        return {"total": total, "today": today_count, "blacklisted": blacklisted}
 
     # ------------------------------------------------------------------
     # User settings

@@ -13,8 +13,11 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/setarea <URL> — область поиска (URL с krisha.kz)\n"
         "/interval 5 — проверять каждые N минут\n"
         "/filters — текущие настройки\n"
+        "/history 5 — последние N найденных объявлений\n"
+        "/stats — статистика\n"
         "/pause — приостановить\n"
-        "/resume — возобновить"
+        "/resume — возобновить\n"
+        "/test — проверить настройки прямо сейчас"
     )
 
 
@@ -97,7 +100,7 @@ async def cmd_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"Комнаты: {settings['rooms']}")
     if settings.get("interval_minutes"):
         lines.append(f"Интервал: {settings['interval_minutes']} мин.")
-    lines.append(f"Статус: {'активен' if settings.get('active') else 'на паузе'}")
+    lines.append(f"Статус: {'активен ✅' if settings.get('active') else 'на паузе ⏸'}")
 
     await update.message.reply_text("\n".join(lines))
 
@@ -154,7 +157,7 @@ async def cmd_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await notifier.send_listing(chat_id=chat_id, listing=matched[0])
         await update.message.reply_text(
-            f"✅ Фильтры работают. Найдено {len(matched)} из {len(listings)} на первой странице."
+            f"Фильтры работают. Найдено {len(matched)} из {len(listings)} на первой странице."
         )
 
     except Exception as e:
@@ -177,7 +180,6 @@ async def cmd_setarea(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Convert /map/ URL to list URL for fetching
     parser = context.bot_data.get("parser")
     search_url = parser.build_url_from_krisha_url(url) if parser else url
 
@@ -186,3 +188,65 @@ async def cmd_setarea(update: Update, context: ContextTypes.DEFAULT_TYPE):
         updates={"polygon_url": url, "search_url": search_url, "active": True},
     )
     await update.message.reply_text("Область поиска обновлена. Мониторинг запущен.")
+
+
+async def cmd_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    storage = context.bot_data["storage"]
+    notifier = context.bot_data.get("notifier")
+    chat_id = update.effective_chat.id
+
+    try:
+        n = int((context.args or ["5"])[0])
+        n = max(1, min(n, 20))
+    except (ValueError, IndexError):
+        n = 5
+
+    listings = storage.get_history(chat_id, limit=n)
+    if not listings:
+        await update.message.reply_text("История пустая — жди новых объявлений!")
+        return
+
+    await update.message.reply_text(f"Последние {len(listings)} объявлений:")
+    for listing in listings:
+        await notifier.send_listing(chat_id=chat_id, listing=listing)
+
+
+async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    storage = context.bot_data["storage"]
+    chat_id = update.effective_chat.id
+
+    stats = storage.get_stats(chat_id)
+    settings = storage.get_settings(chat_id) or {}
+    interval = settings.get("interval_minutes", "?")
+
+    lines = [
+        "<b>Статистика</b>",
+        f"Сегодня найдено: {stats['today']}",
+        f"Всего найдено: {stats['total']}",
+        f"Скрыто объявлений: {stats['blacklisted']}",
+        f"Интервал проверки: каждые {interval} мин.",
+        f"Статус: {'активен ✅' if settings.get('active') else 'на паузе ⏸'}",
+    ]
+    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
+async def callback_skip(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer("Скрыто")
+
+    storage = context.bot_data["storage"]
+    data = query.data or ""
+    if not data.startswith("skip:"):
+        return
+
+    listing_id = data[len("skip:"):]
+    chat_id = query.message.chat_id
+    storage.blacklist(listing_id, chat_id)
+
+    try:
+        if query.message.caption is not None:
+            await query.edit_message_caption(caption="🚫 Скрыто", reply_markup=None)
+        else:
+            await query.edit_message_text(text="🚫 Скрыто", reply_markup=None)
+    except Exception:
+        pass

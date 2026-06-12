@@ -211,14 +211,18 @@ class KrishaParser:
         return base
 
     def build_url_from_krisha_url(self, krisha_url: str) -> str:
-        """Convert map URL to list URL, preserving areas param."""
+        """Convert map URL to list URL, preserving areas param. Injects sort=newest."""
         from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
         parsed = urlparse(krisha_url)
         path = parsed.path.replace("/map/arenda/", "/arenda/").replace("/map/prodazha/", "/prodazha/")
-        # Keep only non-map params (drop zoom, lat, lon)
         params = parse_qs(parsed.query, keep_blank_values=True)
         for drop in ("zoom", "lat", "lon"):
             params.pop(drop, None)
+        # Sort by newest first so we catch new listings immediately
+        if "sort[0][order]" not in params:
+            params["sort[0][order]"] = ["date"]
+        if "sort[0][direction]" not in params:
+            params["sort[0][direction]"] = ["desc"]
         query = urlencode({k: v[0] for k, v in params.items()})
         return urlunparse((parsed.scheme, parsed.netloc, path, "", query, ""))
 
