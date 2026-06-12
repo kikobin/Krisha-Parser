@@ -121,6 +121,45 @@ async def cmd_interval(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Интервал: каждые {minutes} мин.")
 
 
+async def cmd_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    storage = context.bot_data["storage"]
+    parser = context.bot_data.get("parser")
+    notifier = context.bot_data.get("notifier")
+    chat_id = update.effective_chat.id
+
+    settings = storage.get_settings(chat_id=chat_id)
+    if not settings or not settings.get("search_url"):
+        await update.message.reply_text("Сначала задай область: /setarea <URL>")
+        return
+
+    await update.message.reply_text("Ищу последнее объявление...")
+
+    try:
+        from krisha_bot.filters import Filter, GeoFilter
+        html = parser.fetch_page(settings["search_url"])
+        listings = parser.parse_page(html)
+
+        attr_filter = Filter.from_dict(settings)
+        geo = GeoFilter.from_url(settings.get("polygon_url", ""))
+
+        matched = [l for l in listings if attr_filter.matches(l) and geo.matches(l)]
+
+        if not matched:
+            await update.message.reply_text(
+                f"Нашёл {len(listings)} объявлений на странице, но ни одно не прошло фильтры.\n"
+                f"Попробуй расширить диапазон цены (/setprice)."
+            )
+            return
+
+        await notifier.send_listing(chat_id=chat_id, listing=matched[0])
+        await update.message.reply_text(
+            f"✅ Фильтры работают. Найдено {len(matched)} из {len(listings)} на первой странице."
+        )
+
+    except Exception as e:
+        await update.message.reply_text(f"Ошибка: {e}")
+
+
 async def cmd_setarea(update: Update, context: ContextTypes.DEFAULT_TYPE):
     storage = context.bot_data["storage"]
     args = context.args or []

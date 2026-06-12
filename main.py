@@ -40,7 +40,9 @@ def main():
     app.bot_data["storage"] = storage
     app.bot_data["monitor"] = monitor
     app.bot_data["parser"] = parser
+    app.bot_data["notifier"] = notifier
 
+    app.add_handler(CommandHandler("test",     bot_handlers.cmd_test))
     app.add_handler(CommandHandler("start",    bot_handlers.cmd_start))
     app.add_handler(CommandHandler("setprice", bot_handlers.cmd_setprice))
     app.add_handler(CommandHandler("setrooms", bot_handlers.cmd_setrooms))
