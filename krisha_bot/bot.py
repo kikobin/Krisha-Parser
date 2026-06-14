@@ -18,6 +18,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/pause — приостановить\n"
         "/resume — возобновить\n"
         "/test — проверить настройки прямо сейчас\n"
+        "/scan — показать все текущие объявления по фильтрам\n"
         "/reset — сбросить список просмотренных (если был флуд)"
     )
 
@@ -241,6 +242,59 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Статус: {'активен ✅' if settings.get('active') else 'на паузе ⏸'}",
     ]
     await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
+async def cmd_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Fetch ALL current listings matching filters regardless of seen history."""
+    storage = context.bot_data["storage"]
+    parser = context.bot_data.get("parser")
+    notifier = context.bot_data.get("notifier")
+    chat_id = update.effective_chat.id
+
+    settings = storage.get_settings(chat_id)
+    if not settings or not settings.get("search_url"):
+        await update.message.reply_text("Сначала задай область: /setarea <URL>")
+        return
+
+    await update.message.reply_text("Сканирую все страницы...")
+
+    try:
+        from krisha_bot.filters import Filter, GeoFilter
+        url = parser.build_url_from_krisha_url(settings["search_url"])
+        attr_filter = Filter.from_dict(settings)
+        geo = GeoFilter.from_url(settings.get("polygon_url", ""))
+
+        all_listings = []
+        current_url = url
+        while current_url:
+            html = parser.fetch_page(current_url)
+            page_listings = parser.parse_page(html)
+            all_listings.extend(page_listings)
+            current_url = parser.parse_next_page_url(html)
+
+        matched = [
+            l for l in all_listings
+            if attr_filter.matches(l) and geo.matches(l)
+            and not storage.is_blacklisted(l["id"])
+        ]
+
+        if not matched:
+            await update.message.reply_text(
+                f"Всего на сайте: {len(all_listings)}, по фильтрам: 0.\n"
+                f"Попробуй /setprice расширить диапазон."
+            )
+            return
+
+        await update.message.reply_text(
+            f"Найдено {len(matched)} из {len(all_listings)}. Отправляю..."
+        )
+        for listing in matched:
+            await notifier.send_listing(chat_id=chat_id, listing=listing)
+            storage.mark_seen(listing["id"])
+            storage.save_to_history(chat_id, listing)
+
+    except Exception as e:
+        await update.message.reply_text(f"Ошибка: {e}")
 
 
 async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):

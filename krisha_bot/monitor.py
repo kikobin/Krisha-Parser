@@ -81,8 +81,9 @@ class Monitor:
                 url = settings.get("search_url") or settings.get("polygon_url", "")
                 url = self.parser.build_url_from_krisha_url(url)
 
-                # First run after /setarea: silently mark existing listings as seen
-                if not settings.get("warmed_up"):
+                # First run after /setarea: silently mark existing listings as seen.
+                # Only triggers when explicitly set to False by /setarea — not on missing key.
+                if settings.get("warmed_up") is False:
                     await self._warmup(chat_id, url)
                     continue
 
