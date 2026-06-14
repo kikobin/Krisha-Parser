@@ -11,7 +11,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/setprice 50000 120000 — диапазон цены (₸/мес)\n"
         "/setrooms 1 2 — количество комнат\n"
         "/setarea <URL> — область поиска (URL с krisha.kz)\n"
-        "/interval 5 — проверять каждые N минут\n"
+        "/interval 30 — проверять каждые N секунд (мин. 30)\n"
         "/filters — текущие настройки\n"
         "/history 5 — последние N найденных объявлений\n"
         "/stats — статистика\n"
@@ -100,8 +100,9 @@ async def cmd_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"Цена до: {settings['price_to']:,} ₸".replace(",", " "))
     if settings.get("rooms"):
         lines.append(f"Комнаты: {settings['rooms']}")
-    if settings.get("interval_minutes"):
-        lines.append(f"Интервал: {settings['interval_minutes']} мин.")
+    secs = settings.get("interval_seconds") or settings.get("interval_minutes", 0) * 60
+    if secs:
+        lines.append(f"Интервал: каждые {secs} сек.")
     lines.append(f"Статус: {'активен ✅' if settings.get('active') else 'на паузе ⏸'}")
 
     await update.message.reply_text("\n".join(lines))
@@ -110,20 +111,23 @@ async def cmd_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_interval(update: Update, context: ContextTypes.DEFAULT_TYPE):
     storage = context.bot_data["storage"]
     try:
-        minutes = int((context.args or ["0"])[0])
-        if minutes <= 0:
-            raise ValueError("must be positive")
+        seconds = int((context.args or ["0"])[0])
+        if seconds < 30:
+            raise ValueError("minimum 30s")
     except (ValueError, IndexError):
         await update.message.reply_text(
-            "Минимум 1 минута. Пример: /interval 5"
+            "Минимум 30 секунд. Примеры:\n/interval 30 — каждые 30 сек\n/interval 60 — каждую минуту"
         )
         return
 
     storage.update_settings(
         chat_id=update.effective_chat.id,
-        updates={"interval_minutes": minutes},
+        updates={"interval_seconds": seconds},
     )
-    await update.message.reply_text(f"Интервал: каждые {minutes} мин.")
+    mins = seconds // 60
+    secs = seconds % 60
+    label = f"{mins} мин. {secs} сек." if secs else f"{mins} мин."
+    await update.message.reply_text(f"Интервал: каждые {label}")
 
 
 async def cmd_test(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -109,18 +109,13 @@ class TestMonitor:
         await monitor.tick(chat_id=123456, filters=f, url="https://krisha.kz/test")
 
     @pytest.mark.asyncio
-    async def test_tick_paginates_when_next_page_exists(self, mock_deps):
-        """tick() follows pagination and fetches page 2."""
+    async def test_tick_fetches_only_first_page(self, mock_deps):
+        """tick() fetches only first page — new listings are always there (sort=date+desc)."""
         from krisha_bot.monitor import Monitor
         parser, storage, notifier, f = mock_deps
-        # First call returns next page URL, second call returns None
-        parser.parse_next_page_url.side_effect = [
-            "https://krisha.kz/arenda/?page=2",
-            None,
-        ]
         monitor = Monitor(parser=parser, storage=storage, notifier=notifier)
         await monitor.tick(chat_id=123456, filters=f, url="https://krisha.kz/test")
-        assert parser.fetch_page.call_count == 2
+        assert parser.fetch_page.call_count == 1
 
     @pytest.mark.asyncio
     async def test_run_calls_tick_repeatedly(self, mock_deps):

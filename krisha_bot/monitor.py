@@ -17,14 +17,10 @@ class Monitor:
 
     async def tick(self, chat_id: int, filters, url: str):
         try:
-            all_listings = []
-            current_url = url
-
-            while current_url:
-                html = self.parser.fetch_page(current_url)
-                listings = self.parser.parse_page(html)
-                all_listings.extend(listings)
-                current_url = self.parser.parse_next_page_url(html)
+            # Only fetch page 1 — new listings always appear there (sort=date+desc).
+            # Fetching all pages wastes time and new listings are never on page 2+.
+            html = self.parser.fetch_page(url)
+            all_listings = self.parser.parse_page(html)
 
             # Dedup first — skip already-sent and blacklisted listings
             new_listings = self.storage.filter_new(all_listings)
@@ -89,4 +85,12 @@ class Monitor:
 
                 await self.tick(chat_id=chat_id, filters=combined, url=url)
 
-            await asyncio.sleep(self.interval_seconds)
+            # Per-chat interval or global default
+            interval = self.interval_seconds
+            if active:
+                first_settings = self.storage.get_settings(active[0])
+                if first_settings:
+                    interval = first_settings.get("interval_seconds") \
+                        or first_settings.get("interval_minutes", 0) * 60 \
+                        or self.interval_seconds
+            await asyncio.sleep(interval)

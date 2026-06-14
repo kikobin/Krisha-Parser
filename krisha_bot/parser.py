@@ -144,13 +144,16 @@ class KrishaParser:
             or card.select_one('[class*="newbuilding"]')
         )
 
-        # Published date
+        # Published date + view count from stats items
         published_at = None
+        views = 0
         for stat in card.select(".a-card__stats-item"):
             t = stat.get_text(strip=True)
-            if re.search(r"\d+\s+\w+", t):
+            cleaned = re.sub(r"[\s\xa0]", "", t)
+            if cleaned.isdigit():
+                views = int(cleaned)
+            elif re.search(r"\d+\s+\w+", t) and not published_at:
                 published_at = t
-                break
 
         return {
             "id": listing_id,
@@ -169,6 +172,7 @@ class KrishaParser:
             "photos": photos,
             "url": url,
             "published_at": published_at,
+            "views": views,
         }
 
     def parse_next_page_url(self, html: str):

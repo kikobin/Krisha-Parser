@@ -141,16 +141,16 @@ class TestFiltersCommand:
 
 class TestIntervalCommand:
     @pytest.mark.asyncio
-    async def test_interval_saves_minutes(self):
+    async def test_interval_saves_seconds(self):
         from krisha_bot.bot import cmd_interval
         storage = MagicMock()
-        update = make_update("/interval 5")
+        update = make_update("/interval 60")
         ctx = make_context(storage)
-        ctx.args = ["5"]
+        ctx.args = ["60"]
         await cmd_interval(update, ctx)
         storage.update_settings.assert_called_once()
         updates = storage.update_settings.call_args.kwargs.get("updates") or {}
-        assert updates.get("interval_minutes") == 5
+        assert updates.get("interval_seconds") == 60
 
     @pytest.mark.asyncio
     async def test_interval_rejects_zero(self):
